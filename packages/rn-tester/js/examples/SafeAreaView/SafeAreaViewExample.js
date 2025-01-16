@@ -11,7 +11,6 @@
 'use strict';
 
 const React = require('react');
-
 const {
   Button,
   DeviceInfo,
@@ -24,19 +23,19 @@ const {
 
 class SafeAreaViewExample extends React.Component<
   {...},
-  {|
+  {
     modalVisible: boolean,
-  |},
+  },
 > {
-  state = {
+  state: {modalVisible: boolean} = {
     modalVisible: false,
   };
 
-  _setModalVisible = visible => {
+  _setModalVisible = (visible: boolean) => {
     this.setState({modalVisible: visible});
   };
 
-  render() {
+  render(): React.Node {
     return (
       <View>
         <Modal
@@ -65,7 +64,7 @@ class SafeAreaViewExample extends React.Component<
 }
 
 class IsIPhoneXExample extends React.Component<{...}> {
-  render() {
+  render(): React.Node {
     return (
       <View>
         <Text>

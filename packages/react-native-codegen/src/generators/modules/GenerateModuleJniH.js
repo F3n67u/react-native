@@ -12,9 +12,9 @@
 
 import type {SchemaType} from '../../CodegenSchema';
 
-type FilesOutput = Map<string, string>;
-
 const {getModules} = require('./Utils');
+
+type FilesOutput = Map<string, string>;
 
 const ModuleClassDeclarationTemplate = ({
   hasteModuleName,
@@ -49,58 +49,14 @@ const HeaderFileTemplate = ({
 #include <ReactCommon/TurboModule.h>
 #include <jsi/jsi.h>
 
-namespace facebook {
-namespace react {
+namespace facebook::react {
 
 ${modules}
 
+JSI_EXPORT
 std::shared_ptr<TurboModule> ${libraryName}_ModuleProvider(const std::string &moduleName, const JavaTurboModule::InitParams &params);
 
-} // namespace react
-} // namespace facebook
-`;
-};
-
-// Note: this Android.mk template includes dependencies for both NativeModule and components.
-const AndroidMkTemplate = ({libraryName}: $ReadOnly<{libraryName: string}>) => {
-  return `# Copyright (c) Meta Platforms, Inc. and affiliates.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
-
-LOCAL_PATH := $(call my-dir)
-
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := react_codegen_${libraryName}
-
-LOCAL_C_INCLUDES := $(LOCAL_PATH)
-
-LOCAL_SRC_FILES := $(wildcard $(LOCAL_PATH)/*.cpp) $(wildcard $(LOCAL_PATH)/react/renderer/components/${libraryName}/*.cpp)
-LOCAL_SRC_FILES := $(subst $(LOCAL_PATH)/,,$(LOCAL_SRC_FILES))
-
-LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH) $(LOCAL_PATH)/react/renderer/components/${libraryName}
-
-LOCAL_SHARED_LIBRARIES := libfbjni \
-  libfolly_runtime \
-  libglog \
-  libjsi \
-  libreact_codegen_rncore \
-  libreact_debug \
-  libreact_nativemodule_core \
-  libreact_render_core \
-  libreact_render_debug \
-  libreact_render_graphics \
-  librrc_view \
-  libturbomodulejsijni \
-  libyoga
-
-LOCAL_CFLAGS := \\
-  -DLOG_TAG=\\"ReactNative\\"
-
-LOCAL_CFLAGS += -fexceptions -frtti -std=c++17 -Wall
-
-include $(BUILD_SHARED_LIBRARY)
+} // namespace facebook::react
 `;
 };
 
@@ -120,7 +76,7 @@ file(GLOB react_codegen_SRCS CONFIGURE_DEPENDS *.cpp react/renderer/components/$
 
 add_library(
   react_codegen_${libraryName}
-  SHARED
+  OBJECT
   \${react_codegen_SRCS}
 )
 
@@ -129,17 +85,14 @@ target_include_directories(react_codegen_${libraryName} PUBLIC . react/renderer/
 target_link_libraries(
   react_codegen_${libraryName}
   fbjni
-  folly_runtime
-  glog
-  ${libraryName !== 'rncore' ? 'react_codegen_rncore' : ''}
-  react_debug
-  react_nativemodule_core
-  react_render_core
-  react_render_debug
-  react_render_graphics
-  rrc_view
-  turbomodulejsijni
-  yoga
+  jsi
+  # We need to link different libraries based on whether we are building rncore or not, that's necessary
+  # because we want to break a circular dependency between react_codegen_rncore and reactnative
+  ${
+    libraryName !== 'rncore'
+      ? 'reactnative'
+      : 'folly_runtime glog react_debug react_nativemodule_core react_render_componentregistry react_render_core react_render_debug react_render_graphics react_render_imagemanager react_render_mapbuffer react_utils rrc_image rrc_view turbomodulejsijni yoga'
+  }
 )
 
 target_compile_options(
@@ -148,7 +101,7 @@ target_compile_options(
   -DLOG_TAG=\\"ReactNative\\"
   -fexceptions
   -frtti
-  -std=c++17
+  -std=c++20
   -Wall
 )
 `;
@@ -160,6 +113,7 @@ module.exports = {
     schema: SchemaType,
     packageName?: string,
     assumeNonnull: boolean = false,
+    headerPrefix?: string,
   ): FilesOutput {
     const nativeModules = getModules(schema);
     const modules = Object.keys(nativeModules)
@@ -181,12 +135,6 @@ module.exports = {
     });
     return new Map([
       [`jni/${fileName}`, replacedTemplate],
-      [
-        'jni/Android.mk',
-        AndroidMkTemplate({
-          libraryName: libraryName,
-        }),
-      ],
       ['jni/CMakeLists.txt', CMakeListsTemplate({libraryName: libraryName})],
     ]);
   },

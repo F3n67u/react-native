@@ -16,31 +16,62 @@ TODO:
 - ViewConfigs should spread in View's valid attributes
 */
 
-const fs = require('fs');
+import type {SchemaType} from '../CodegenSchema';
+
+const schemaValidator = require('../SchemaValidator.js');
+const generateComponentDescriptorCpp = require('./components/GenerateComponentDescriptorCpp.js');
 const generateComponentDescriptorH = require('./components/GenerateComponentDescriptorH.js');
 const generateComponentHObjCpp = require('./components/GenerateComponentHObjCpp.js');
 const generateEventEmitterCpp = require('./components/GenerateEventEmitterCpp.js');
 const generateEventEmitterH = require('./components/GenerateEventEmitterH.js');
 const generatePropsCpp = require('./components/GeneratePropsCpp.js');
 const generatePropsH = require('./components/GeneratePropsH.js');
-const generateModuleH = require('./modules/GenerateModuleH.js');
-const generateModuleCpp = require('./modules/GenerateModuleCpp.js');
-const generateModuleObjCpp = require('./modules/GenerateModuleObjCpp');
-const generateModuleJavaSpec = require('./modules/GenerateModuleJavaSpec.js');
-const GenerateModuleJniCpp = require('./modules/GenerateModuleJniCpp.js');
-const GenerateModuleJniH = require('./modules/GenerateModuleJniH.js');
-const generatePropsJavaInterface = require('./components/GeneratePropsJavaInterface.js');
 const generatePropsJavaDelegate = require('./components/GeneratePropsJavaDelegate.js');
-const generateTests = require('./components/GenerateTests.js');
+const generatePropsJavaInterface = require('./components/GeneratePropsJavaInterface.js');
 const generateShadowNodeCpp = require('./components/GenerateShadowNodeCpp.js');
 const generateShadowNodeH = require('./components/GenerateShadowNodeH.js');
-const generateThirdPartyFabricComponentsProviderObjCpp = require('./components/GenerateThirdPartyFabricComponentsProviderObjCpp.js');
+const generateStateCpp = require('./components/GenerateStateCpp.js');
+const generateStateH = require('./components/GenerateStateH.js');
+const generateTests = require('./components/GenerateTests.js');
 const generateThirdPartyFabricComponentsProviderH = require('./components/GenerateThirdPartyFabricComponentsProviderH.js');
+const generateThirdPartyFabricComponentsProviderObjCpp = require('./components/GenerateThirdPartyFabricComponentsProviderObjCpp.js');
 const generateViewConfigJs = require('./components/GenerateViewConfigJs.js');
+const generateModuleCpp = require('./modules/GenerateModuleCpp.js');
+const generateModuleH = require('./modules/GenerateModuleH.js');
+const generateModuleJavaSpec = require('./modules/GenerateModuleJavaSpec.js');
+const generateModuleJniCpp = require('./modules/GenerateModuleJniCpp.js');
+const generateModuleJniH = require('./modules/GenerateModuleJniH.js');
+const generateModuleObjCpp = require('./modules/GenerateModuleObjCpp');
+const fs = require('fs');
 const path = require('path');
-const schemaValidator = require('../SchemaValidator.js');
 
-import type {SchemaType} from '../CodegenSchema';
+const ALL_GENERATORS = {
+  generateComponentDescriptorH: generateComponentDescriptorH.generate,
+  generateComponentDescriptorCpp: generateComponentDescriptorCpp.generate,
+  generateComponentHObjCpp: generateComponentHObjCpp.generate,
+  generateEventEmitterCpp: generateEventEmitterCpp.generate,
+  generateEventEmitterH: generateEventEmitterH.generate,
+  generatePropsCpp: generatePropsCpp.generate,
+  generatePropsH: generatePropsH.generate,
+  generateStateCpp: generateStateCpp.generate,
+  generateStateH: generateStateH.generate,
+  generateModuleH: generateModuleH.generate,
+  generateModuleCpp: generateModuleCpp.generate,
+  generateModuleObjCpp: generateModuleObjCpp.generate,
+  generateModuleJavaSpec: generateModuleJavaSpec.generate,
+  generateModuleJniCpp: generateModuleJniCpp.generate,
+  generateModuleJniH: generateModuleJniH.generate,
+  generatePropsJavaInterface: generatePropsJavaInterface.generate,
+  generatePropsJavaDelegate: generatePropsJavaDelegate.generate,
+  generateTests: generateTests.generate,
+  generateShadowNodeCpp: generateShadowNodeCpp.generate,
+  generateShadowNodeH: generateShadowNodeH.generate,
+  generateThirdPartyFabricComponentsProviderObjCpp:
+    generateThirdPartyFabricComponentsProviderObjCpp.generate,
+  generateThirdPartyFabricComponentsProviderH:
+    generateThirdPartyFabricComponentsProviderH.generate,
+  generateViewConfigJs: generateViewConfigJs.generate,
+};
 
 type LibraryOptions = $ReadOnly<{
   libraryName: string,
@@ -48,11 +79,13 @@ type LibraryOptions = $ReadOnly<{
   outputDirectory: string,
   packageName?: string, // Some platforms have a notion of package, which should be configurable.
   assumeNonnull: boolean,
+  useLocalIncludePaths?: boolean,
 }>;
 
 type SchemasOptions = $ReadOnly<{
   schemas: {[string]: SchemaType},
   outputDirectory: string,
+  supportedApplePlatforms?: {[string]: {[string]: boolean}},
 }>;
 
 type LibraryGenerators =
@@ -61,6 +94,7 @@ type LibraryGenerators =
   | 'descriptors'
   | 'events'
   | 'props'
+  | 'states'
   | 'tests'
   | 'shadow-nodes'
   | 'modulesAndroid'
@@ -82,6 +116,7 @@ type SchemasConfig = $ReadOnly<{
 const LIBRARY_GENERATORS = {
   descriptors: [generateComponentDescriptorH.generate],
   events: [generateEventEmitterCpp.generate, generateEventEmitterH.generate],
+  states: [generateStateCpp.generate, generateStateH.generate],
   props: [
     generateComponentHObjCpp.generate,
     generatePropsCpp.generate,
@@ -93,10 +128,13 @@ const LIBRARY_GENERATORS = {
   componentsAndroid: [
     // JNI/C++ files
     generateComponentDescriptorH.generate,
+    generateComponentDescriptorCpp.generate,
     generateEventEmitterCpp.generate,
     generateEventEmitterH.generate,
     generatePropsCpp.generate,
     generatePropsH.generate,
+    generateStateCpp.generate,
+    generateStateH.generate,
     generateShadowNodeCpp.generate,
     generateShadowNodeH.generate,
     // Java files
@@ -105,17 +143,20 @@ const LIBRARY_GENERATORS = {
   ],
   componentsIOS: [
     generateComponentDescriptorH.generate,
+    generateComponentDescriptorCpp.generate,
     generateEventEmitterCpp.generate,
     generateEventEmitterH.generate,
     generateComponentHObjCpp.generate,
     generatePropsCpp.generate,
     generatePropsH.generate,
+    generateStateCpp.generate,
+    generateStateH.generate,
     generateShadowNodeCpp.generate,
     generateShadowNodeH.generate,
   ],
   modulesAndroid: [
-    GenerateModuleJniCpp.generate,
-    GenerateModuleJniH.generate,
+    generateModuleJniCpp.generate,
+    generateModuleJniH.generate,
     generateModuleJavaSpec.generate,
   ],
   modulesCxx: [generateModuleCpp.generate, generateModuleH.generate],
@@ -186,6 +227,10 @@ function checkOrWriteFiles(
 }
 
 module.exports = {
+  allGenerators: ALL_GENERATORS,
+  libraryGenerators: LIBRARY_GENERATORS,
+  schemaGenerators: SCHEMAS_GENERATORS,
+
   generate(
     {
       libraryName,
@@ -193,16 +238,24 @@ module.exports = {
       outputDirectory,
       packageName,
       assumeNonnull,
+      useLocalIncludePaths,
     }: LibraryOptions,
     {generators, test}: LibraryConfig,
   ): boolean {
     schemaValidator.validate(schema);
 
-    function composePath(intermediate) {
+    const defaultHeaderPrefix = 'react/renderer/components';
+    const headerPrefix =
+      useLocalIncludePaths === true
+        ? ''
+        : `${defaultHeaderPrefix}/${libraryName}/`;
+    function composePath(intermediate: string) {
       return path.join(outputDirectory, intermediate, libraryName);
     }
 
-    const componentIOSOutput = composePath('react/renderer/components/');
+    const componentIOSOutput = composePath(
+      useLocalIncludePaths === true ? '' : defaultHeaderPrefix,
+    );
     const modulesIOSOutput = composePath('./');
 
     const outputFoldersForGenerators = {
@@ -211,6 +264,7 @@ module.exports = {
       descriptors: outputDirectory,
       events: outputDirectory,
       props: outputDirectory,
+      states: outputDirectory,
       componentsAndroid: outputDirectory,
       modulesAndroid: outputDirectory,
       modulesCxx: outputDirectory,
@@ -222,21 +276,25 @@ module.exports = {
 
     for (const name of generators) {
       for (const generator of LIBRARY_GENERATORS[name]) {
-        generator(libraryName, schema, packageName, assumeNonnull).forEach(
-          (contents: string, fileName: string) => {
-            generatedFiles.push({
-              name: fileName,
-              content: contents,
-              outputDir: outputFoldersForGenerators[name],
-            });
-          },
-        );
+        generator(
+          libraryName,
+          schema,
+          packageName,
+          assumeNonnull,
+          headerPrefix,
+        ).forEach((contents: string, fileName: string) => {
+          generatedFiles.push({
+            name: fileName,
+            content: contents,
+            outputDir: outputFoldersForGenerators[name],
+          });
+        });
       }
     }
     return checkOrWriteFiles(generatedFiles, test);
   },
   generateFromSchemas(
-    {schemas, outputDirectory}: SchemasOptions,
+    {schemas, outputDirectory, supportedApplePlatforms}: SchemasOptions,
     {generators, test}: SchemasConfig,
   ): boolean {
     Object.keys(schemas).forEach(libraryName =>
@@ -247,13 +305,15 @@ module.exports = {
 
     for (const name of generators) {
       for (const generator of SCHEMAS_GENERATORS[name]) {
-        generator(schemas).forEach((contents: string, fileName: string) => {
-          generatedFiles.push({
-            name: fileName,
-            content: contents,
-            outputDir: outputDirectory,
-          });
-        });
+        generator(schemas, supportedApplePlatforms).forEach(
+          (contents: string, fileName: string) => {
+            generatedFiles.push({
+              name: fileName,
+              content: contents,
+              outputDir: outputDirectory,
+            });
+          },
+        );
       }
     }
     return checkOrWriteFiles(generatedFiles, test);

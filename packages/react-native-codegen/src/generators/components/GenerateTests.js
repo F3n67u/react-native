@@ -9,9 +9,11 @@
  */
 
 'use strict';
-
+import type {ComponentShape, PropTypeAnnotation} from '../../CodegenSchema';
 import type {SchemaType} from '../../CodegenSchema';
-const {getImports, toSafeCppString} = require('./CppHelpers');
+
+const {toSafeCppString} = require('../Utils');
+const {getImports} = require('./CppHelpers');
 
 type FilesOutput = Map<string, string>;
 type PropValueType = string | number | boolean;
@@ -76,7 +78,10 @@ TEST(${componentName}_${testName}, etc) {
 }
 `;
 
-function getTestCasesForProp(propName, typeAnnotation) {
+function getTestCasesForProp(
+  propName: string,
+  typeAnnotation: PropTypeAnnotation,
+) {
   const cases = [];
   if (typeAnnotation.type === 'StringEnumTypeAnnotation') {
     typeAnnotation.options.forEach(option =>
@@ -134,7 +139,7 @@ function getTestCasesForProp(propName, typeAnnotation) {
   return cases;
 }
 
-function generateTestsString(name, component) {
+function generateTestsString(name: string, component: ComponentShape) {
   function createTest({testName, propName, propValue, raw = false}: TestCase) {
     const value =
       !raw && typeof propValue === 'string' ? `"${propValue}"` : propValue;
@@ -147,7 +152,7 @@ function generateTestsString(name, component) {
     });
   }
 
-  const testCases = component.props.reduce((cases, prop) => {
+  const testCases = component.props.reduce((cases: Array<TestCase>, prop) => {
     return cases.concat(getTestCasesForProp(prop.name, prop.typeAnnotation));
   }, []);
 
@@ -166,6 +171,7 @@ module.exports = {
     schema: SchemaType,
     packageName?: string,
     assumeNonnull: boolean = false,
+    headerPrefix?: string,
   ): FilesOutput {
     const fileName = 'Tests.cpp';
     const allImports = new Set([

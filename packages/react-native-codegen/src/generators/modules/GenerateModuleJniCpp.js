@@ -11,18 +11,19 @@
 'use strict';
 
 import type {
-  Nullable,
   NamedShape,
-  SchemaType,
+  NativeModuleEventEmitterShape,
+  NativeModuleFunctionTypeAnnotation,
+  NativeModuleParamTypeAnnotation,
   NativeModulePropertyShape,
   NativeModuleReturnTypeAnnotation,
-  NativeModuleParamTypeAnnotation,
-  NativeModuleFunctionTypeAnnotation,
+  Nullable,
+  SchemaType,
 } from '../../CodegenSchema';
-
 import type {AliasResolver} from './Utils';
+
+const {unwrapNullable} = require('../../parsers/parsers-commons');
 const {createAliasResolver, getModules} = require('./Utils');
-const {unwrapNullable} = require('../../parsers/flow/modules/utils');
 
 type FilesOutput = Map<string, string>;
 
@@ -54,9 +55,11 @@ const HostFunctionTemplate = ({
 
 const ModuleClassConstructorTemplate = ({
   hasteModuleName,
+  eventEmitters,
   methods,
 }: $ReadOnly<{
   hasteModuleName: string,
+  eventEmitters: $ReadOnlyArray<NativeModuleEventEmitterShape>,
   methods: $ReadOnlyArray<{
     propertyName: string,
     argCount: number,
@@ -69,7 +72,21 @@ ${methods
   .map(({propertyName, argCount}) => {
     return `  methodMap_["${propertyName}"] = MethodMetadata {${argCount}, __hostFunction_${hasteModuleName}SpecJSI_${propertyName}};`;
   })
-  .join('\n')}
+  .join('\n')}${
+    eventEmitters.length > 0
+      ? eventEmitters
+          .map(eventEmitter => {
+            return `
+  eventEmitterMap_["${eventEmitter.name}"] = std::make_shared<AsyncEventEmitter<folly::dynamic>>();`;
+          })
+          .join('')
+      : ''
+  }${
+    eventEmitters.length > 0
+      ? `
+  setEventEmitterCallback(params.instance);`
+      : ''
+  }
 }`.trim();
 };
 
@@ -91,12 +108,10 @@ const FileTemplate = ({
   libraryName: string,
   include: string,
   modules: string,
-  moduleLookups: $ReadOnlyArray<
-    $ReadOnly<{
-      hasteModuleName: string,
-      moduleName: string,
-    }>,
-  >,
+  moduleLookups: $ReadOnlyArray<{
+    hasteModuleName: string,
+    moduleName: string,
+  }>,
 }>) => {
   return `
 /**
@@ -110,8 +125,7 @@ const FileTemplate = ({
 
 #include ${include}
 
-namespace facebook {
-namespace react {
+namespace facebook::react {
 
 ${modules}
 
@@ -120,8 +134,7 @@ ${moduleLookups.map(ModuleLookupTemplate).join('\n')}
   return nullptr;
 }
 
-} // namespace react
-} // namespace facebook
+} // namespace facebook::react
 `;
 };
 
@@ -152,9 +165,39 @@ function translateReturnTypeToKind(
       return 'VoidKind';
     case 'StringTypeAnnotation':
       return 'StringKind';
+    case 'StringLiteralTypeAnnotation':
+      return 'StringKind';
+    case 'StringLiteralUnionTypeAnnotation':
+      return 'StringKind';
     case 'BooleanTypeAnnotation':
       return 'BooleanKind';
+    case 'EnumDeclaration':
+      switch (typeAnnotation.memberType) {
+        case 'NumberTypeAnnotation':
+          return 'NumberKind';
+        case 'StringTypeAnnotation':
+          return 'StringKind';
+        default:
+          throw new Error(
+            `Unknown enum prop type for returning value, found: ${realTypeAnnotation.type}"`,
+          );
+      }
+    case 'UnionTypeAnnotation':
+      switch (typeAnnotation.memberType) {
+        case 'NumberTypeAnnotation':
+          return 'NumberKind';
+        case 'ObjectTypeAnnotation':
+          return 'ObjectKind';
+        case 'StringTypeAnnotation':
+          return 'StringKind';
+        default:
+          throw new Error(
+            `Unsupported union member returning value, found: ${realTypeAnnotation.memberType}"`,
+          );
+      }
     case 'NumberTypeAnnotation':
+      return 'NumberKind';
+    case 'NumberLiteralTypeAnnotation':
       return 'NumberKind';
     case 'DoubleTypeAnnotation':
       return 'NumberKind';
@@ -171,7 +214,7 @@ function translateReturnTypeToKind(
     case 'ArrayTypeAnnotation':
       return 'ArrayKind';
     default:
-      (realTypeAnnotation.type: empty);
+      (realTypeAnnotation.type: 'MixedTypeAnnotation');
       throw new Error(
         `Unknown prop type for returning value, found: ${realTypeAnnotation.type}"`,
       );
@@ -207,9 +250,39 @@ function translateParamTypeToJniType(
       }
     case 'StringTypeAnnotation':
       return 'Ljava/lang/String;';
+    case 'StringLiteralTypeAnnotation':
+      return 'Ljava/lang/String;';
+    case 'StringLiteralUnionTypeAnnotation':
+      return 'Ljava/lang/String;';
     case 'BooleanTypeAnnotation':
       return !isRequired ? 'Ljava/lang/Boolean;' : 'Z';
+    case 'EnumDeclaration':
+      switch (typeAnnotation.memberType) {
+        case 'NumberTypeAnnotation':
+          return !isRequired ? 'Ljava/lang/Double;' : 'D';
+        case 'StringTypeAnnotation':
+          return 'Ljava/lang/String;';
+        default:
+          throw new Error(
+            `Unknown enum prop type for method arg, found: ${realTypeAnnotation.type}"`,
+          );
+      }
+    case 'UnionTypeAnnotation':
+      switch (typeAnnotation.memberType) {
+        case 'NumberTypeAnnotation':
+          return !isRequired ? 'Ljava/lang/Double;' : 'D';
+        case 'ObjectTypeAnnotation':
+          return 'Lcom/facebook/react/bridge/ReadableMap;';
+        case 'StringTypeAnnotation':
+          return 'Ljava/lang/String;';
+        default:
+          throw new Error(
+            `Unsupported union prop value, found: ${realTypeAnnotation.memberType}"`,
+          );
+      }
     case 'NumberTypeAnnotation':
+      return !isRequired ? 'Ljava/lang/Double;' : 'D';
+    case 'NumberLiteralTypeAnnotation':
       return !isRequired ? 'Ljava/lang/Double;' : 'D';
     case 'DoubleTypeAnnotation':
       return !isRequired ? 'Ljava/lang/Double;' : 'D';
@@ -226,7 +299,7 @@ function translateParamTypeToJniType(
     case 'FunctionTypeAnnotation':
       return 'Lcom/facebook/react/bridge/Callback;';
     default:
-      (realTypeAnnotation.type: empty);
+      (realTypeAnnotation.type: 'MixedTypeAnnotation');
       throw new Error(
         `Unknown prop type for method arg, found: ${realTypeAnnotation.type}"`,
       );
@@ -259,9 +332,39 @@ function translateReturnTypeToJniType(
       return 'V';
     case 'StringTypeAnnotation':
       return 'Ljava/lang/String;';
+    case 'StringLiteralTypeAnnotation':
+      return 'Ljava/lang/String;';
+    case 'StringLiteralUnionTypeAnnotation':
+      return 'Ljava/lang/String;';
     case 'BooleanTypeAnnotation':
       return nullable ? 'Ljava/lang/Boolean;' : 'Z';
+    case 'EnumDeclaration':
+      switch (typeAnnotation.memberType) {
+        case 'NumberTypeAnnotation':
+          return nullable ? 'Ljava/lang/Double;' : 'D';
+        case 'StringTypeAnnotation':
+          return 'Ljava/lang/String;';
+        default:
+          throw new Error(
+            `Unknown enum prop type for method return type, found: ${realTypeAnnotation.type}"`,
+          );
+      }
+    case 'UnionTypeAnnotation':
+      switch (typeAnnotation.memberType) {
+        case 'NumberTypeAnnotation':
+          return nullable ? 'Ljava/lang/Double;' : 'D';
+        case 'ObjectTypeAnnotation':
+          return 'Lcom/facebook/react/bridge/WritableMap;';
+        case 'StringTypeAnnotation':
+          return 'Ljava/lang/String;';
+        default:
+          throw new Error(
+            `Unsupported union member type, found: ${realTypeAnnotation.memberType}"`,
+          );
+      }
     case 'NumberTypeAnnotation':
+      return nullable ? 'Ljava/lang/Double;' : 'D';
+    case 'NumberLiteralTypeAnnotation':
       return nullable ? 'Ljava/lang/Double;' : 'D';
     case 'DoubleTypeAnnotation':
       return nullable ? 'Ljava/lang/Double;' : 'D';
@@ -278,7 +381,7 @@ function translateReturnTypeToJniType(
     case 'ArrayTypeAnnotation':
       return 'Lcom/facebook/react/bridge/WritableArray;';
     default:
-      (realTypeAnnotation.type: empty);
+      (realTypeAnnotation.type: 'MixedTypeAnnotation');
       throw new Error(
         `Unknown prop type for method return type, found: ${realTypeAnnotation.type}"`,
       );
@@ -354,6 +457,7 @@ module.exports = {
     schema: SchemaType,
     packageName?: string,
     assumeNonnull: boolean = false,
+    headerPrefix?: string,
   ): FilesOutput {
     const nativeModules = getModules(schema);
 
@@ -368,12 +472,12 @@ module.exports = {
       .sort()
       .map(hasteModuleName => {
         const {
-          aliases,
-          spec: {properties},
+          aliasMap,
+          spec: {eventEmitters, methods},
         } = nativeModules[hasteModuleName];
-        const resolveAlias = createAliasResolver(aliases);
+        const resolveAlias = createAliasResolver(aliasMap);
 
-        const translatedMethods = properties
+        const translatedMethods = methods
           .map(property =>
             translateMethodForImplementation(
               hasteModuleName,
@@ -388,7 +492,8 @@ module.exports = {
           '\n\n' +
           ModuleClassConstructorTemplate({
             hasteModuleName,
-            methods: properties
+            eventEmitters,
+            methods: methods
               .map(({name: propertyName, typeAnnotation}) => {
                 const [{returnTypeAnnotation, params}] =
                   unwrapNullable<NativeModuleFunctionTypeAnnotation>(
@@ -415,8 +520,10 @@ module.exports = {
       })
       .join('\n');
 
-    // $FlowFixMe[missing-type-arg]
-    const moduleLookups = Object.keys(nativeModules)
+    const moduleLookups: $ReadOnlyArray<{
+      hasteModuleName: string,
+      moduleName: string,
+    }> = Object.keys(nativeModules)
       .filter(hasteModuleName => {
         const module = nativeModules[hasteModuleName];
         return !(
@@ -425,10 +532,8 @@ module.exports = {
         );
       })
       .sort((a, b) => {
-        const moduleA = nativeModules[a];
-        const moduleB = nativeModules[b];
-        const nameA = moduleA.moduleNames[0];
-        const nameB = moduleB.moduleNames[0];
+        const nameA = nativeModules[a].moduleName;
+        const nameB = nativeModules[b].moduleName;
         if (nameA < nameB) {
           return -1;
         } else if (nameA > nameB) {
@@ -436,15 +541,10 @@ module.exports = {
         }
         return 0;
       })
-      .flatMap<{moduleName: string, hasteModuleName: string}>(
-        (hasteModuleName: string) => {
-          const {moduleNames} = nativeModules[hasteModuleName];
-          return moduleNames.map(moduleName => ({
-            moduleName,
-            hasteModuleName,
-          }));
-        },
-      );
+      .map((hasteModuleName: string) => ({
+        moduleName: nativeModules[hasteModuleName].moduleName,
+        hasteModuleName,
+      }));
 
     const fileName = `${libraryName}-generated.cpp`;
     const replacedTemplate = FileTemplate({
