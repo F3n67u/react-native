@@ -10,24 +10,24 @@
 
 'use strict';
 
-const RNTesterButton = require('../../components/RNTesterButton');
-const React = require('react');
+import RNTesterButton from '../../components/RNTesterButton';
+import RNTesterText from '../../components/RNTesterText';
+import React from 'react';
+import {Alert, Platform, ToastAndroid, View} from 'react-native';
 
-const {Alert, Platform, ToastAndroid, Text, View} = require('react-native');
-
-function burnCPU(milliseconds) {
+function burnCPU(milliseconds: number) {
   const start = global.performance.now();
   while (global.performance.now() < start + milliseconds) {}
 }
 
-type RequestIdleCallbackTesterProps = $ReadOnly<{||}>;
-type RequestIdleCallbackTesterState = {|message: string|};
+type RequestIdleCallbackTesterProps = $ReadOnly<{}>;
+type RequestIdleCallbackTesterState = {message: string};
 
 class RequestIdleCallbackTester extends React.Component<
   RequestIdleCallbackTesterProps,
   RequestIdleCallbackTesterState,
 > {
-  state = {
+  state: RequestIdleCallbackTesterState = {
     message: '-',
   };
 
@@ -41,7 +41,7 @@ class RequestIdleCallbackTester extends React.Component<
     }
   }
 
-  render() {
+  render(): React.Node {
     return (
       <View>
         {/* $FlowFixMe[method-unbinding] added when improving typing for this
@@ -68,7 +68,7 @@ class RequestIdleCallbackTester extends React.Component<
           Stop background task
         </RNTesterButton>
 
-        <Text>{this.state.message}</Text>
+        <RNTesterText>{this.state.message}</RNTesterText>
       </View>
     );
   }
@@ -87,7 +87,7 @@ class RequestIdleCallbackTester extends React.Component<
         message = 'Burned CPU for 10ms,';
       }
       this.setState({
-        message: `${message} ${deadline.timeRemaining()}ms remaining in frame`,
+        message: `${message} ${deadline.timeRemaining()}ms remaining in frame (timeout: ${String(deadline.didTimeout)})`,
       });
     });
   }
@@ -117,7 +117,11 @@ class RequestIdleCallbackTester extends React.Component<
       this._idleTimer = null;
     }
 
-    const handler = deadline => {
+    const handler = (deadline: {
+      didTimeout: boolean,
+      timeRemaining: () => number,
+      ...
+    }) => {
       while (deadline.timeRemaining() > 5) {
         burnCPU(5);
         this.setState({
@@ -140,10 +144,10 @@ class RequestIdleCallbackTester extends React.Component<
   };
 }
 
-type TimerTesterProps = $ReadOnly<{|
-  dt?: number,
+type TimerTesterProps = $ReadOnly<{
+  dt?: any,
   type: string,
-|}>;
+}>;
 
 class TimerTester extends React.Component<TimerTesterProps> {
   _ii = 0;
@@ -155,7 +159,7 @@ class TimerTester extends React.Component<TimerTesterProps> {
   _immediateId: ?Object = null;
   _timerFn: ?() => any = null;
 
-  render() {
+  render(): any {
     const args =
       'fn' + (this.props.dt !== undefined ? ', ' + this.props.dt : '');
     return (
@@ -265,18 +269,18 @@ class TimerTester extends React.Component<TimerTesterProps> {
 }
 
 class IntervalExample extends React.Component<
-  $ReadOnly<{||}>,
-  {|
+  $ReadOnly<{}>,
+  {
     showTimer: boolean,
-  |},
+  },
 > {
-  state = {
+  state: {showTimer: boolean} = {
     showTimer: true,
   };
 
   _timerTester: ?React.ElementRef<typeof TimerTester>;
 
-  render() {
+  render(): React.Node {
     return (
       <View>
         {this.state.showTimer && this._renderTimer()}
@@ -287,7 +291,7 @@ class IntervalExample extends React.Component<
     );
   }
 
-  _renderTimer = () => {
+  _renderTimer = (): React.Node => {
     return (
       <View>
         <TimerTester
@@ -325,6 +329,8 @@ exports.examples = [
           <TimerTester type="setTimeout" dt={0} />
           <TimerTester type="setTimeout" dt={1} />
           <TimerTester type="setTimeout" dt={100} />
+          <TimerTester type="setTimeout" dt={{valueOf: () => 200}} />
+          <TimerTester type="setTimeout" dt={'500'} />
         </View>
       );
     },

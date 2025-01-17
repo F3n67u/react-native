@@ -9,11 +9,12 @@
  */
 
 import type {RNTesterModuleExample} from '../../types/RNTesterTypes';
-import * as React from 'react';
-import {Animated, View, StyleSheet} from 'react-native';
+
 import RNTConfigurationBlock from '../../components/RNTConfigurationBlock';
 import RNTesterButton from '../../components/RNTesterButton';
 import ToggleNativeDriver from './utils/ToggleNativeDriver';
+import * as React from 'react';
+import {Animated, StyleSheet, Text, View} from 'react-native';
 
 function AnimatedView({useNativeDriver}: {useNativeDriver: boolean}) {
   const animations = [];
@@ -37,12 +38,42 @@ function AnimatedView({useNativeDriver}: {useNativeDriver: boolean}) {
     }),
   );
 
-  const animatedTextStyle = {
+  const animatedBaseValue = new Animated.Value(0);
+  const interpolationAnimatedStyle = {
+    backgroundColor: animatedBaseValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['blue', 'red'],
+    }),
+    borderColor: animatedBaseValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['orange', 'purple'],
+    }),
+  };
+  animations.push(
+    Animated.timing(animatedBaseValue, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver,
+    }),
+  );
+
+  const animatedFirstSpanTextStyle = {
     color: new Animated.Color('blue'),
   };
   animations.push(
-    Animated.timing(animatedTextStyle.color, {
+    Animated.timing(animatedFirstSpanTextStyle.color, {
       toValue: new Animated.Color('red'),
+      duration: 1000,
+      useNativeDriver,
+    }),
+  );
+
+  const animatedSecondSpanTextStyle = {
+    color: new Animated.Color('orange'),
+  };
+  animations.push(
+    Animated.timing(animatedSecondSpanTextStyle.color, {
+      toValue: new Animated.Color('purple'),
       duration: 1000,
       useNativeDriver,
     }),
@@ -70,10 +101,19 @@ function AnimatedView({useNativeDriver}: {useNativeDriver: boolean}) {
         }}>
         Press to animate
       </RNTesterButton>
-      <Animated.View style={[styles.animatedView, animatedViewStyle]} />
-      <Animated.Text style={[styles.animatedText, animatedTextStyle]}>
-        Hello World
-      </Animated.Text>
+      <View style={styles.boxes}>
+        <Animated.View style={[styles.animatedView, animatedViewStyle]} />
+        <Animated.View
+          style={[styles.animatedView, interpolationAnimatedStyle]}
+        />
+      </View>
+      <Text style={styles.animatedText}>
+        <Text>The </Text>
+        <Animated.Text style={animatedFirstSpanTextStyle}>quick</Animated.Text>
+        <Text> brown </Text>
+        <Animated.Text style={animatedSecondSpanTextStyle}>fox</Animated.Text>
+        <Text> jumps over the lazy dog</Text>
+      </Text>
       <Animated.Image
         style={[styles.animatedImage, animatedImageStyle]}
         source={require('../../assets/bunny.png')}
@@ -106,6 +146,7 @@ const styles = StyleSheet.create({
     height: 100,
     width: 100,
     borderWidth: 10,
+    marginRight: 10,
   },
   animatedText: {
     fontSize: 20,
@@ -114,6 +155,9 @@ const styles = StyleSheet.create({
   animatedImage: {
     height: 100,
     width: 100,
+  },
+  boxes: {
+    flexDirection: 'row',
   },
 });
 

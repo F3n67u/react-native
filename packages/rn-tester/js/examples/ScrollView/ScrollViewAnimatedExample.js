@@ -10,6 +10,8 @@
 
 'use strict';
 
+import type AnimatedValue from 'react-native/Libraries/Animated/nodes/AnimatedValue';
+
 const React = require('react');
 const ReactNative = require('react-native');
 const {Component} = React;
@@ -17,7 +19,7 @@ const {StyleSheet, Text, View, Animated, Easing, TouchableOpacity, Dimensions} =
   ReactNative;
 
 class ScrollViewAnimatedExample extends Component<{...}> {
-  _scrollViewPos = new Animated.Value(0);
+  _scrollViewPos: AnimatedValue = new Animated.Value(0);
 
   startAnimation: () => void = () => {
     this._scrollViewPos.setValue(0);
@@ -90,7 +92,7 @@ exports.description = 'Component that is animated when ScrollView is offset.';
 exports.examples = [
   {
     title: 'Animated by scroll view',
-    render: function (): React.Element<typeof ScrollViewAnimatedExample> {
+    render(): React.MixedElement {
       return <ScrollViewAnimatedExample />;
     },
   },

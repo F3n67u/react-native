@@ -10,16 +10,15 @@
 
 'use strict';
 
-const React = require('react');
-const {
+import AnExSet from './AnExSet';
+import React from 'react';
+import {
   Animated,
   LayoutAnimation,
   PanResponder,
   StyleSheet,
   View,
-} = require('react-native');
-
-const AnExSet = require('./AnExSet');
+} from 'react-native';
 
 const CIRCLE_SIZE = 80;
 const CIRCLE_MARGIN = 18;
@@ -189,7 +188,7 @@ class Circle extends React.Component<any, any> {
       </Animated.View>
     );
   }
-  _toggleIsActive = velocity => {
+  _toggleIsActive = (velocity: ?number) => {
     const config = {tension: 30, friction: 7};
     if (this.state.isActive) {
       Animated.spring(this.props.openVal, {
@@ -235,6 +234,10 @@ class AnExApp extends React.Component<any, any> {
       } else {
         let onLayout = null;
         if (!this.state.restLayouts[idx]) {
+          /* $FlowFixMe[missing-local-annot] The type annotation(s) required by
+           * Flow's LTI update could not be added via codemod */
+          /* $FlowFixMe[missing-this-annot] The 'this' type annotation(s)
+           * required by Flow's LTI update could not be added via codemod */
           onLayout = function (index, e) {
             const layout = e.nativeEvent.layout;
             this.setState(state => {
@@ -311,7 +314,7 @@ function distance(p1: Point, p2: Point): number {
   return dx * dx + dy * dy;
 }
 
-function moveToClosest({activeKey, keys, restLayouts}, position) {
+function moveToClosest({activeKey, keys, restLayouts}: any, position: Point) {
   const activeIdx = -1;
   let closestIdx = activeIdx;
   let minDist = Infinity;
@@ -389,7 +392,7 @@ exports.description =
 exports.examples = [
   {
     title: 'And example app',
-    render(): React.Element<typeof AnExApp> {
+    render(): React.MixedElement {
       return <AnExApp />;
     },
   },

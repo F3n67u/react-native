@@ -14,10 +14,11 @@ import * as React from 'react';
 export function SectionList_onEndReached(): React.Node {
   const [output, setOutput] = React.useState('');
   const exampleProps = {
-    onEndReached: info => setOutput('onEndReached'),
+    onEndReached: (info: {distanceFromEnd: number, ...}) =>
+      setOutput('onEndReached'),
     onEndReachedThreshold: 0,
   };
-  const ref = React.useRef(null);
+  const ref = React.useRef<any>(null);
 
   const onTest = () => {
     const scrollResponder = ref?.current?.getScrollResponder();
@@ -38,9 +39,9 @@ export function SectionList_onEndReached(): React.Node {
 
 export default {
   title: 'SectionList onEndReached',
-  name: 'SectionList-onEndReached',
+  name: 'onEndReached',
   description: 'Test onEndReached behavior',
-  render: function (): React.Element<typeof SectionList_onEndReached> {
+  render: function (): React.MixedElement {
     return <SectionList_onEndReached />;
   },
 };

@@ -4,14 +4,14 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * @emails react_native
  * @format
+ * @oncall react_native
  */
 
-const path = require('path');
 const fs = require('fs');
-const os = require('os');
 const {sync: makeDirSync} = require('make-dir');
+const os = require('os');
+const path = require('path');
 
 const packageJson = JSON.parse(
   fs.readFileSync(require.resolve('../package.json'), 'utf8'),
@@ -61,9 +61,6 @@ function save() {
     fs.writeFileSync(FILENAME, serialised);
   } catch (e) {
     switch (e.code) {
-      // workaround https://github.com/nodejs/node/issues/31481
-      // todo: remove the ENOENT error check when we drop node.js 13 support
-      case 'ENOENT':
       case 'EACCES':
       case 'EPERM':
         console.warn(

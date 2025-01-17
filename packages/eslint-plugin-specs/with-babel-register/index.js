@@ -4,17 +4,17 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * @emails react_native
  * @format
+ * @oncall react_native
  */
 
-const babel = require('@babel/core');
-const {OptionManager, DEFAULT_EXTENSIONS} = require('@babel/core');
-const sourceMapSupport = require('source-map-support');
-const {addHook} = require('pirates');
-const path = require('path');
-const fs = require('fs');
 const diskCache = require('./disk-cache');
+const babel = require('@babel/core');
+const {DEFAULT_EXTENSIONS, OptionManager} = require('@babel/core');
+const fs = require('fs');
+const path = require('path');
+const {addHook} = require('pirates');
+const sourceMapSupport = require('source-map-support');
 
 function compile(sourceMapManager, cache, options, code, filename) {
   const opts = new OptionManager().init({
